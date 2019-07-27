@@ -1,2 +1,3 @@
 # fabricutil
-Python Fabric 2 utilities
+
+[Fabric](http://www.fabfile.org) helper utilities.
