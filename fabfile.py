@@ -35,7 +35,7 @@ def build(c):
 @task
 def bump(c, part):
     """Bump package version."""
-    c.run(f'{sys.executable} -m bumpversion {part}')
+    c.run(f'bumpversion {part}', replace_env=False)
 
 
 @task
