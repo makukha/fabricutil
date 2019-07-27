@@ -14,6 +14,10 @@ Typical workflow is:
 from fabric import task
 import sys
 
+from fabricutils import is_windows
+
+PTY = not is_windows()
+
 
 @task
 def init(c):
@@ -25,7 +29,7 @@ def init(c):
 def build(c):
     """Build next version."""
     c.run(f'{sys.executable} setup.py sdist bdist_wheel')
-    c.run(f'twine check dist/*', replace_env=False)
+    c.run(f'{sys.executable} -m twine check dist/*')
 
 
 @task
@@ -35,11 +39,6 @@ def bump(c, part):
 
 
 @task
-def upload(c, stage='testpypi'):
-    """Upload package to (Test)PyPi."""
-    if stage == 'testpypi':
-        c.run('twine upload --repository-url https://test.pypi.org/legacy/ dist/*')
-    elif stage == 'pypi':
-        c.run('twine upload dist/*')
-    else:
-        raise ValueError(f'Unsopported stage: {stage}')
+def upload(c):
+    """Upload package to PyPi."""
+    c.run(f'{sys.executable} -m twine upload dist/* --verbose', pty=PTY)
