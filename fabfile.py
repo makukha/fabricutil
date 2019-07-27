@@ -7,10 +7,11 @@ Typical workflow is:
     - edit code of the package
     - `fab build`, verify results
     - `fab bump {major|minor|patch}`
-    - `fab upload pypi` to upload to PyPi
+    - `fab distclean build upload` to upload to PyPi
 """
 
 from fabric import task
+import shutil
 import sys
 
 from fabricutils import is_windows
@@ -35,6 +36,12 @@ def build(c):
 def bump(c, part):
     """Bump package version."""
     c.run(f'bumpversion {part}', replace_env=False)
+
+
+@task
+def distclean(c):
+    """Remove previously compiled sources."""
+    shutil.rmtree('dist')
 
 
 @task
