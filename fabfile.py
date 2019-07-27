@@ -7,7 +7,6 @@ Typical workflow is:
     - edit code of the package
     - `fab build`, verify results
     - `fab bump {major|minor|patch}`
-    - `fab upload`, go to [TestPyPi](https://test.pypi.org/), check
     - `fab upload pypi` to upload to PyPi
 """
 
