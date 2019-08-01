@@ -1,14 +1,16 @@
 __all__ = [
-    'conda_python_executable',
-    'docker_mount_path_resolver',
-    'docker_mount_path_desktop',
-    'docker_mount_path_toolbox',
-    'python_executable',
-    'is_docker_toolbox',
+    # general purpose
     'is_windows',
+    # python and anaconda
+    'get_conda_env_path',
+    'get_python_script_path',
+    # docker
+    'get_docker_mount_path_builder',
+    'is_docker_toolbox',
     ]
 
 import fabric
+import invoke
 import io
 import json
 import os
@@ -16,48 +18,66 @@ import pathlib
 import typing
 
 
-def conda_python_executable(conn: fabric.Connection, conda_env_name: str) -> pathlib.Path:
-    """Get path to python executable for specific anaconda environment."""
+# General helpers
+
+
+def is_windows(conn: fabric.Connection = None) -> bool:
+    """Check if local or remote OS is Windows; for remote OS, it is required to have python on path."""
+    if conn is None or type(conn) == invoke.Context:
+        # no remote connection, executed locally
+        return os.name == 'nt'
+    else:
+        # for remote connection, we need python on path
+        stream = io.StringIO()
+        conn.run('python -c "import os; print(os.name == \'nt\')"', replace_env=False, out_stream=stream)
+        return stream.getvalue().strip() == 'True'
+
+
+# Python and Anaconda helpers
+
+
+def get_conda_env_path(conn: fabric.Connection, envname: str = 'base') -> pathlib.Path:
+    """Get path of specific Anaconda environment."""
     stream = io.StringIO()
     conn.run('conda info --envs --json', replace_env=False, out_stream=stream)
     info = json.loads(stream.getvalue())
-    envdir = next(iter(p for p in (pathlib.Path(s) for s in info['envs']) if p.name == conda_env_name))
-    return python_executable(envdir)
+    return next(iter(p for p in (pathlib.Path(s) for s in info['envs']) if p.name == envname))
 
 
-def docker_mount_path_resolver(conn: fabric.Connection) -> typing.Callable[[pathlib.Path], str]:
-    """Get docker mount path resolver function, one of `docker_mount_path_desktop` or `docker_mount_path_toolbox`."""
-    return docker_mount_path_toolbox if is_docker_toolbox(conn) else docker_mount_path_desktop
+def get_python_script_path(conn: fabric.Connection, envdir: pathlib.Path, scriptname: str = 'python') -> pathlib.Path:
+    """Get path to specific script from Python/Anaconda environment."""
+    if not is_windows(conn):
+        path =  envdir / 'bin' / scriptname
+    else:
+        if scriptname in ('python', 'pythonw'):
+            path = envdir / f'{scriptname}.exe'
+        else:
+            path = envdir / 'Scripts' / f'{scriptname}.exe'
+    return path
 
 
-def docker_mount_path_desktop(path: pathlib.Path) -> str:
-    """Get the bind mount path for Docker Desktop."""
-    return str(path.resolve())
+#  Docker helpers
 
 
-def docker_mount_path_toolbox(path: pathlib.Path) -> str:
-    """Get the bind mount path for Docker Toolbox."""
-    p = path.resolve()
-    mountpath = f'/{p.drive.lower().replace(":", "")}/{pathlib.Path(*p.parts[1:]).as_posix()}'
-    if not mountpath.startswith('/c/Users/'):
-        raise ValueError('Only files under C:/Users/ can be shared automatically with Docker Toolbox.')
-    return mountpath
+def get_docker_mount_path_builder(conn: fabric.Connection) -> typing.Callable[[pathlib.Path], str]:
+    """Get docker mount path builder function."""
 
+    def docker_desktop(path: pathlib.Path) -> str:
+        return str(path.resolve())
 
-def python_executable(venvdir: pathlib.Path) -> typing.Optional[pathlib.Path]:
-    """Get python executable path by venv directory path."""
-    python = (venvdir / 'python.exe') if is_windows() else (venvdir / 'bin' / 'python')
-    return python if python.exists() else None
+    def docker_toolbox(path: pathlib.Path) -> str:
+        p = path.resolve()
+        mountpath = f'/{p.drive.lower().replace(":", "")}/{pathlib.Path(*p.parts[1:]).as_posix()}'
+        if not mountpath.startswith('/c/Users/'):
+            raise ValueError('Only files under C:/Users/ can be shared automatically with Docker Toolbox.')
+        return mountpath
+
+    return docker_toolbox if is_docker_toolbox(conn) else docker_desktop
 
 
 def is_docker_toolbox(conn: fabric.Connection) -> bool:
-    """Check if docker uses docker toolbox."""
+    """Check if docker uses Docker Toolbox."""
     stream = io.StringIO()
     conn.run('docker system info', replace_env=False, out_stream=stream)
     info = stream.getvalue()
     return info.find('Operating System: Boot2Docker') >= 0
-
-
-def is_windows() -> bool:
-    """Check if local OS is Windows."""
-    return os.name == 'nt'
