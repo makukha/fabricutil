@@ -49,10 +49,17 @@ def get_python_script_path(conn: fabric.Connection, envdir: pathlib.Path, script
     if not is_windows(conn):
         path =  envdir / 'bin' / scriptname
     else:
-        if scriptname in ('python', 'pythonw'):
-            path = envdir / f'{scriptname}.exe'
-        else:
-            path = envdir / 'Scripts' / f'{scriptname}.exe'
+        path = None
+        paths = (
+            envdir / f'{scriptname}.exe',
+            envdir / 'Scripts' / scriptname,
+            envdir / 'Scripts' / f'{scriptname}.exe',
+            )
+        for p in paths:
+            if p.exists():
+                path = p
+                break
+        path = path or paths[-1]
     return path
 
 
